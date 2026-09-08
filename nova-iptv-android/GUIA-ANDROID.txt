@@ -1,0 +1,79 @@
+================================================================================
+  NOVA IPTV ANDROID - GUIA DE COMPILACAO DO APK
+================================================================================
+
+O PROJETO JA ESTA PRONTO. Toda a estrutura Android foi gerada e os assets
+web (www/) estao sincronizados. Basta compilar.
+
+REQUISITOS
+--------------------------------------------------------------------------------
+1) Java JDK 17 ou superior
+   - Download: https://adoptium.net/temurin/releases/?version=17
+   - Defina JAVA_HOME:
+     [System.Environment]::SetEnvironmentVariable("JAVA_HOME", "C:\caminho\para\jdk17", "User")
+
+2) Android Studio (inclui o SDK e o Gradle)
+   - Download: https://developer.android.com/studio
+   - Ao abrir pela primeira vez, ele instala automaticamente o SDK.
+
+3) Node.js 18+ (ja utilizado para gerar esta estrutura)
+
+OPCAO A - COMPILAR PELO ANDROID STUDIO (MAIS FACIL)
+--------------------------------------------------------------------------------
+1. Abra o Android Studio.
+2. Menu File > Open, selecione a pasta:
+     nova-iptv-android\android
+3. Aguarde a indexacao e o download das dependencias Gradle (primeira vez).
+4. Menu Build > Build Bundle(s) / APK(s) > Build APK(s).
+5. O APK sera gerado em:
+     nova-iptv-android\android\app\build\outputs\apk\debug\app-debug.apk
+
+OPCAO B - COMPILAR POR LINHA DE COMANDO
+--------------------------------------------------------------------------------
+Abra o PowerShell na pasta nova-iptv-android e execute:
+
+    $env:JAVA_HOME = "C:\caminho\para\jdk17"
+    .\gen_apk.ps1
+
+Ou manualmente:
+
+    cd android
+    .\gradlew.bat assembleDebug
+
+O APK sera gerado em:
+    android\app\build\outputs\apk\debug\app-debug.apk
+
+INSTALAR NO CELULAR
+--------------------------------------------------------------------------------
+1. Copie o app-debug.apk para o celular.
+2. No celular, abra o arquivo e autorize "Instalar apps desconhecidos".
+3. Pronto! O app abre com a interface completa.
+
+ALTERNATIVA: instalar via ADB (com o celular conectado por USB):
+
+    adb install android\app\build\outputs\apk\debug\app-debug.apk
+
+ESTRUTURA DO PROJETO
+--------------------------------------------------------------------------------
+nova-iptv-android/
+  www/                    <- HTML/CSS/JS + bridge.js (mesma UI do desktop)
+  android/                <- Projeto Android nativo (Capacitor)
+    app/src/main/
+      java/com/nova/iptv/
+        MainActivity.java            <- Entry point
+        HttpBridgePlugin.java        <- HTTP nativo (sem CORS)
+        CorsBypassWebViewClient.java <- Libera hls.js via interceptacao
+      res/                           <- Icones e splash screens gerados
+      assets/public/                 <- Copia sincronizada do www/
+  capacitor.config.json
+  gen_icons.mjs           <- Script de geracao de icones (ja executado)
+
+COMO ATUALIZAR OS ASSETS WEB
+--------------------------------------------------------------------------------
+Se editar arquivos em www/ (app.js, styles.css, index.html, bridge.js):
+
+    npx cap sync android
+
+Depois recompilar o APK.
+
+================================================================================

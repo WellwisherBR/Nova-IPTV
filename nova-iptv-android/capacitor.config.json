@@ -1,0 +1,13 @@
+{
+  "appId": "com.nova.iptv",
+  "appName": "Nova IPTV",
+  "webDir": "www",
+  "server": {
+    "androidScheme": "http",
+    "cleartext": true
+  },
+  "android": {
+    "allowMixedContent": true,
+    "backgroundColor": "#0b0d17"
+  }
+}
