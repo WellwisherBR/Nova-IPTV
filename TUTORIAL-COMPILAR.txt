@@ -1,0 +1,121 @@
+================================================================================
+  NOVA IPTV - TUTORIAL DE COMPILACAO DOS EXECUTAVEIS (.EXE)
+  Gera: Nova IPTV-1.0.0-Portable.exe e Nova IPTV-1.0.0-Setup.exe
+================================================================================
+
+REQUISITOS
+--------------------------------------------------------------------------------
+1) Node.js (versao 18 ou superior)
+   - Download: https://nodejs.org/
+   - Verifique a instalacao no PowerShell/CMD:
+        node --version
+        npm --version
+
+2) O projeto deve conter os arquivos principais:
+   - package.json       (configuracao + alvo de build "build")
+   - main.js            (processo principal do Electron)
+   - preload.js         (ponte segura entre processos)
+   - src\               (index.html, styles.css, app.js)
+   - assets\icon.ico    (icone do aplicativo)
+
+
+PASSO 1 - INSTALAR DEPENDENCIAS
+--------------------------------------------------------------------------------
+Abra o PowerShell na pasta do projeto e execute:
+
+    npm install
+
+Isso instala: electron, electron-builder e hls.js (alem de criar o
+node_modules e o package-lock.json). A primeira vez baixa o binario do
+Electron (~100 MB), portanto pode demorar.
+
+Se o binario do Electron nao baixar corretamente (erro de versao ao abrir),
+fique a vontadade para forcar o download com:
+
+    node node_modules\electron\install.js
+
+
+PASSO 2 - COMPILAR OS EXECUTAVEIS
+--------------------------------------------------------------------------------
+No mesmo PowerShell:
+
+    npm run dist
+
+(Equivalente a: npx electron-builder --win)
+
+O electron-builder vai:
+  1. Empacotar o app em dist\win-unpacked\
+  2. Baixar as ferramentas NSIS (na primeira vez)
+  3. Gerar os instaladores em dist\
+
+Arquivos gerados em dist\:
+  - Nova IPTV-1.0.0-Portable.exe   -> versao portatil (so executar)
+  - Nova IPTV-1.0.0-Setup.exe      -> instalador (NSIS, com atalho no desktop)
+
+
+PASSO 3 - TESTAR SEM GERAR INSTALADOR (OPCIONAL)
+--------------------------------------------------------------------------------
+Para abrir o app direto da pasta compilada:
+
+    dist\win-unpacked\Nova IPTV.exe
+
+Para rodar em modo desenvolvimento (sem compilar):
+
+    npm start
+
+
+SOLUCAO DE PROBLEMAS CONHECIDOS
+--------------------------------------------------------------------------------
+PROBLEMA 1: "Cannot read properties of undefined (reading 'whenReady')"
+CAUSA: a variavel de ambiente ELECTRON_RUN_AS_NODE esta definida (comum em
+terminais dentro de apps Electron, como o terminal do VS Code), fazendo o
+Electron rodar como Node comum.
+SOLUCAO (PowerShell, apenas na sessao atual):
+
+    $env:ELECTRON_RUN_AS_NODE=$null
+    npm run dist
+
+--------------------------------------------------------------------------------
+PROBLEMA 2: erro ao baixar/extrair "winCodeSign" com mensagem
+"Cannot create symbolic link : O cliente nao tem o privilegio necessario"
+CAUSA: o arquivo winCodeSign-2.6.0.7z contem symbolic links do macOS que o
+Windows nao deixa criar sem privilegio de administrador.
+SOLUCAO A (mais simples): ative o "Modo do Desenvolvedor" do Windows em
+Configuracoes > Privacidade e seguranca > Para desenvolvedores, e repita o
+npm run dist.
+
+SOLUCAO B (manual): extraia voce mesmo o arquivo .7z baixado na pasta
+    %LOCALAPPDATA%\electron-builder\Cache\winCodeSign\
+para a pasta
+    %LOCALAPPDATA%\electron-builder\Cache\winCodeSign\winCodeSign-2.6.0\
+(ignorando os 2 erros de symbolic link .dylib, que sao apenas para macOS).
+Depois rode npm run dist novamente - ele encontrara o cache pronto.
+
+--------------------------------------------------------------------------------
+PROBLEMA 3: npm nao encontra "electron" ou "npx"
+SOLUCAO: feche e reabra o PowerShell apos instalar o Node.js, ou use o
+caminho completo:  "C:\Program Files\nodejs\npm.cmd" install
+
+
+ALTERANDO A VERSAO OU O NOME DO APP
+--------------------------------------------------------------------------------
+Edite o package.json:
+  - "version"                         -> muda a versao no nome dos arquivos
+  - "productName"                     -> muda o nome exibido (Nova IPTV)
+  - build.win.icon                    -> caminho do .ico (256x256 recomendado)
+  - build.nsis.artifactName           -> nome do instalador
+  - build.portable.artifactName       -> nome do portatil
+
+Para gerar apenas um dos formatos:
+
+    npx electron-builder --win portable     (somente portatil)
+    npx electron-builder --win nsis         (somente instalador)
+
+
+RESUMO RAPIDO
+--------------------------------------------------------------------------------
+    npm install
+    npm run dist
+    pronto: dist\Nova IPTV-1.0.0-Portable.exe
+            dist\Nova IPTV-1.0.0-Setup.exe
+================================================================================

@@ -1,0 +1,52 @@
+{
+  "name": "nova-iptv",
+  "productName": "Nova IPTV",
+  "version": "1.0.0",
+  "description": "Player IPTV moderno com suporte a Xtream Codes e M3U",
+  "main": "main.js",
+  "author": "luanh",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "smoke": "electron . --smoke",
+    "dist": "electron-builder --win"
+  },
+  "dependencies": {
+    "hls.js": "^1.5.17"
+  },
+  "devDependencies": {
+    "electron": "^33.2.0",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "com.nova.iptv",
+    "productName": "Nova IPTV",
+    "files": [
+      "main.js",
+      "preload.js",
+      "src/**/*",
+      "assets/**/*"
+    ],
+    "directories": {
+      "output": "dist"
+    },
+    "win": {
+      "icon": "assets/icon.ico",
+      "target": [
+        "nsis",
+        "portable"
+      ]
+    },
+    "portable": {
+      "artifactName": "${productName}-${version}-Portable.${ext}"
+    },
+    "nsis": {
+      "artifactName": "${productName}-${version}-Setup.${ext}",
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "shortcutName": "Nova IPTV"
+    }
+  }
+}

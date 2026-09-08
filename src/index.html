@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Nova IPTV</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div id="app">
+    <header id="topbar">
+      <div class="brand" id="btn-brand">
+        <div class="brand-logo">
+          <svg viewBox="0 0 24 24" fill="none"><path d="M8 6.5v11l9-5.5-9-5.5z" fill="currentColor"/></svg>
+        </div>
+        <div class="brand-text">NOVA<span>IPTV</span></div>
+      </div>
+
+      <div class="topbar-center">
+        <div class="profile-picker">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+          <select id="profile-select" title="Perfil ativo"></select>
+        </div>
+        <button class="icon-btn" id="btn-refresh" title="Atualizar playlist">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
+        </button>
+      </div>
+
+      <div class="topbar-right">
+        <button class="btn ghost" id="btn-profiles">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h0a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h0a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v0a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+          Perfis
+        </button>
+      </div>
+    </header>
+
+    <main id="screen-home" class="screen">
+      <div class="home-scroll">
+        <div class="home-hero">
+          <div>
+            <h1 id="home-greeting">Bem-vindo</h1>
+            <div class="hero-sub" id="home-date"></div>
+          </div>
+          <div class="hero-profile" id="home-profile-info"></div>
+        </div>
+
+        <div class="tiles">
+          <div class="tile tile-live" data-type="live">
+            <div class="tile-glow"></div>
+            <div class="tile-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="m17 2-5 5-5-5"/></svg>
+            </div>
+            <div class="tile-label">TV ao Vivo</div>
+            <div class="tile-count" id="count-live">0 canais</div>
+          </div>
+          <div class="tile tile-vod" data-type="vod">
+            <div class="tile-glow"></div>
+            <div class="tile-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="2" y="2" width="20" height="20" rx="2.5"/><path d="M7 2v20M17 2v20M2 7h5M2 12h20M2 17h5M17 7h5M17 17h5"/></svg>
+            </div>
+            <div class="tile-label">Filmes</div>
+            <div class="tile-count" id="count-vod">0 filmes</div>
+          </div>
+          <div class="tile tile-series" data-type="series">
+            <div class="tile-glow"></div>
+            <div class="tile-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="2" y="4" width="20" height="14" rx="2"/><path d="M8 21h8M12 18v3"/><path d="m10 8.5 4 2.5-4 2.5v-5z" fill="currentColor" stroke="none"/></svg>
+            </div>
+            <div class="tile-label">Séries</div>
+            <div class="tile-count" id="count-series">0 séries</div>
+          </div>
+          <div class="tile tile-fav" data-type="favorites">
+            <div class="tile-glow"></div>
+            <div class="tile-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7z"/></svg>
+            </div>
+            <div class="tile-label">Favoritos</div>
+            <div class="tile-count" id="count-fav">0 itens</div>
+          </div>
+        </div>
+
+        <section id="home-cont-wrap" class="hidden">
+          <div class="section-head">
+            <h3>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="m10 8.5 5 3.5-5 3.5v-7z" fill="currentColor" stroke="none"/></svg>
+              Continuar assistindo
+            </h3>
+          </div>
+          <div class="fav-row" id="home-cont-row"></div>
+        </section>
+
+        <section id="home-favs-wrap" class="hidden">
+          <div class="section-head">
+            <h3>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7z"/></svg>
+              Acesso rápido — Favoritos
+            </h3>
+          </div>
+          <div class="fav-row" id="home-favs-row"></div>
+        </section>
+      </div>
+    </main>
+
+    <main id="screen-content" class="screen hidden">
+      <aside id="cat-sidebar">
+        <div class="sidebar-head" id="sidebar-title">Categorias</div>
+        <div class="cat-list" id="cat-list"></div>
+        <div class="sidebar-foot" id="sidebar-foot"></div>
+      </aside>
+      <section class="content-main">
+        <div class="content-header">
+          <button class="icon-btn" id="btn-content-back" title="Voltar">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+          </button>
+          <div class="content-title-wrap">
+            <h2 id="content-title"></h2>
+            <div class="content-sub" id="content-sub"></div>
+          </div>
+          <div class="search-box">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+            <input id="search" type="text" placeholder="Buscar..." autocomplete="off">
+          </div>
+        </div>
+        <div class="grid-scroll">
+          <div id="content-grid" class="grid"></div>
+        </div>
+      </section>
+    </main>
+
+    <main id="screen-profiles" class="screen hidden">
+      <div class="home-scroll">
+        <div class="home-hero">
+          <div>
+            <h1>Perfis</h1>
+            <div class="hero-sub">Gerencie suas conexões Xtream Codes e playlists M3U</div>
+          </div>
+        </div>
+        <div class="profiles-grid" id="profiles-grid"></div>
+      </div>
+    </main>
+  </div>
+
+  <div id="player" class="hidden">
+    <div class="player-chrome player-top">
+      <button class="icon-btn dark" id="btn-player-back" title="Voltar">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+      </button>
+      <div class="player-titles">
+        <div id="player-title"></div>
+        <div id="player-sub"></div>
+      </div>
+      <button class="icon-btn dark" id="btn-player-external" title="Abrir em player externo">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><path d="M15 3h6v6M10 14 21 3"/></svg>
+      </button>
+    </div>
+    <video id="player-video" controls autoplay></video>
+    <div id="player-loading" class="player-loading hidden">
+      <div class="spinner"></div>
+      <span>Carregando stream...</span>
+    </div>
+    <div id="player-error" class="player-error hidden">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg>
+      <div class="pe-title">Não foi possível reproduzir</div>
+      <div class="pe-msg" id="player-error-msg"></div>
+      <div class="pe-actions">
+        <button class="btn primary" id="btn-player-retry">Tentar novamente</button>
+        <button class="btn ghost" id="btn-player-ext2">Abrir em player externo</button>
+        <button class="btn ghost" id="btn-player-close">Voltar</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="modal-backdrop" class="hidden">
+    <div id="modal"></div>
+  </div>
+
+  <div id="toasts"></div>
+
+  <div id="loading" class="hidden">
+    <div class="loading-card">
+      <div class="spinner big"></div>
+      <div id="loading-msg">Carregando...</div>
+    </div>
+  </div>
+
+  <script src="../node_modules/hls.js/dist/hls.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
