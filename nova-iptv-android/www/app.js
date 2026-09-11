@@ -33,7 +33,8 @@ const state = {
   progress: {},
   currentTrack: null,
   resumeAt: 0,
-  lastTrackSave: 0
+  lastTrackSave: 0,
+  epContext: null
 };
 
 let hlsInstance = null;
@@ -171,8 +172,91 @@ function playProgressEntry(entry) {
     toast('Não foi possível continuar: item ou perfil indisponível.', 'error');
     return;
   }
+  if (entry.kind === 'series' && entry.src && entry.src.type === 'episode' && p && p.type === 'xtream') {
+    playEpisodeWithContext(p, entry.src.seriesId, entry.src.season, entry.src.epId, entry.position, entry.name, entry.image);
+    return;
+  }
   const track = { key: entry.key, kind: entry.kind, profileId: entry.profileId, name: entry.name, image: entry.image, src: entry.src };
   playUrl(url, entry.name, entry.kind === 'series' ? 'Série' : 'Filme', null, { track, resume: entry.position });
+}
+
+async function playEpisodeWithContext(profile, seriesId, seasonKey, epId, resumePos, displayName, image) {
+  showLoading('Carregando série...');
+  let info;
+  try {
+    info = await fetchJson(xtreamBase(profile) + '&action=get_series_info&series_id=' + encodeURIComponent(seriesId), 30000);
+  } catch (e) {
+    hideLoading();
+    toast('Erro ao carregar série: ' + e.message, 'error');
+    return;
+  }
+  hideLoading();
+  const episodesMap = (info && info.episodes) || {};
+  const seasons = Object.keys(episodesMap).sort((a, b) => Number(a) - Number(b));
+  const seriesName = (info && info.info && info.info.name) || displayName || 'Série';
+
+  function findNextEpisode(sKey, eId) {
+    const eps = episodesMap[sKey] || [];
+    const idx = eps.findIndex((e) => String(e.id) === String(eId));
+    if (idx >= 0 && idx < eps.length - 1) return { season: sKey, ep: eps[idx + 1] };
+    const sIdx = seasons.indexOf(sKey);
+    if (sIdx >= 0 && sIdx < seasons.length - 1) {
+      const ns = seasons[sIdx + 1];
+      const nEps = episodesMap[ns] || [];
+      if (nEps.length) return { season: ns, ep: nEps[0] };
+    }
+    return null;
+  }
+
+  function playEp(sKey, ep) {
+    const s = normalizeServer(profile.server);
+    const auth = encodeURIComponent(profile.username) + '/' + encodeURIComponent(profile.password);
+    const url = `${s}/series/${auth}/${ep.id}.${ep.container_extension || 'mp4'}`;
+    const num = ep.episode_num != null ? ep.episode_num : '';
+    const epTitle = ep.title || ('Episódio ' + num);
+    const fullTitle = `${seriesName} — T${sKey}E${num}`;
+    const key = `${profile.id}:ep:${seriesId}:S${sKey}:${ep.id}`;
+    const track = {
+      key, kind: 'series', profileId: profile.id, name: fullTitle, image,
+      src: { type: 'episode', seriesId, season: sKey, epId: ep.id, ext: ep.container_extension || 'mp4' }
+    };
+    state.epContext = { seasonKey: sKey, ep, episodesMap, seasons, profile, item: { id: seriesId, name: seriesName, image }, findNextEpisode, playEp };
+    playUrl(url, fullTitle, epTitle, () => {
+      const next = findNextEpisode(sKey, ep.id);
+      if (next) {
+        toast(`Próximo episódio: T${next.season} E${next.ep.episode_num || ''}`, 'info');
+        playEp(next.season, next.ep);
+      }
+    }, { track, resume: 0 });
+  }
+
+  const eps = episodesMap[seasonKey] || [];
+  const ep = eps.find((e) => String(e.id) === String(epId));
+  if (!ep) {
+    toast('Episódio não encontrado.', 'error');
+    return;
+  }
+
+  const s = normalizeServer(profile.server);
+  const auth = encodeURIComponent(profile.username) + '/' + encodeURIComponent(profile.password);
+  const url = `${s}/series/${auth}/${ep.id}.${ep.container_extension || 'mp4'}`;
+  const num = ep.episode_num != null ? ep.episode_num : '';
+  const epTitle = ep.title || ('Episódio ' + num);
+  const fullTitle = `${seriesName} — T${seasonKey}E${num}`;
+  const key = `${profile.id}:ep:${seriesId}:S${seasonKey}:${ep.id}`;
+  const track = {
+    key, kind: 'series', profileId: profile.id, name: fullTitle, image,
+    src: { type: 'episode', seriesId, season: seasonKey, epId: ep.id, ext: ep.container_extension || 'mp4' }
+  };
+
+  state.epContext = { seasonKey, ep, episodesMap, seasons, profile, item: { id: seriesId, name: seriesName, image }, findNextEpisode, playEp };
+  playUrl(url, fullTitle, epTitle, () => {
+    const next = findNextEpisode(seasonKey, ep.id);
+    if (next) {
+      toast(`Próximo episódio: T${next.season} E${next.ep.episode_num || ''}`, 'info');
+      playEp(next.season, next.ep);
+    }
+  }, { track, resume: resumePos });
 }
 
 function promptResume(entry, onFresh) {
@@ -877,10 +961,14 @@ function playUrl(url, title, sub, onEnded, opts = {}) {
   state.resumeAt = Number(opts.resume) > 0 ? Number(opts.resume) : 0;
   state.playerOpen = true;
   $('#player').classList.remove('hidden');
+  $('#player').classList.add('show-controls');
+  clearTimeout(state.controlsTimer);
+  state.controlsTimer = setTimeout(() => $('#player').classList.remove('show-controls'), 4000);
   $('#player-title').textContent = title || '';
   $('#player-sub').textContent = sub || '';
   $('#player-error').classList.add('hidden');
   $('#player-loading').classList.remove('hidden');
+  updateEpControlsVisibility();
 
   const video = $('#player-video');
   destroyHls();
@@ -970,6 +1058,49 @@ function closePlayer() {
   $('#player').classList.add('hidden');
   $('#player-error').classList.add('hidden');
   $('#player-loading').classList.add('hidden');
+  $('#player').classList.remove('show-controls');
+
+  const ctx = state.epContext;
+  state.epContext = null;
+  if (ctx && ctx.item) {
+    openSeriesDetail(ctx.item, ctx.profile.id);
+  }
+}
+
+function findPrevEpisode() {
+  const ctx = state.epContext;
+  if (!ctx) return null;
+  const { seasonKey, ep, episodesMap, seasons } = ctx;
+  const eps = episodesMap[seasonKey] || [];
+  const idx = eps.findIndex((e) => String(e.id) === String(ep.id));
+  if (idx > 0) return { season: seasonKey, ep: eps[idx - 1] };
+  const sIdx = seasons.indexOf(seasonKey);
+  if (sIdx > 0) {
+    const ps = seasons[sIdx - 1];
+    const pEps = episodesMap[ps] || [];
+    if (pEps.length) return { season: ps, ep: pEps[pEps.length - 1] };
+  }
+  return null;
+}
+
+function playerSeek(seconds) {
+  const video = $('#player-video');
+  if (!isFinite(video.duration)) return;
+  video.currentTime = Math.max(0, Math.min(video.duration, video.currentTime + seconds));
+}
+
+function updateEpControlsVisibility() {
+  const el = $('#player-ep-controls');
+  el.classList.remove('hidden');
+  if (state.epContext) {
+    const prev = findPrevEpisode();
+    const next = state.epContext.findNextEpisode(state.epContext.seasonKey, state.epContext.ep.id);
+    $('#btn-prev-ep').style.display = prev ? '' : 'none';
+    $('#btn-next-ep').style.display = next ? '' : 'none';
+  } else {
+    $('#btn-prev-ep').style.display = 'none';
+    $('#btn-next-ep').style.display = 'none';
+  }
 }
 
 async function openSeriesDetail(item, profileId) {
@@ -1035,22 +1166,31 @@ async function openSeriesDetail(item, profileId) {
       '</div><div class="episode-list" id="episode-list"></div>';
   }
 
+  const backdrop = infoObj.backdrop_path || infoObj.cover_big || cover || item.image;
+
   openModal(
     '<div class="modal-card wide">' +
-      '<div class="modal-head"><h3>Detalhes da série</h3><button class="icon-btn" data-close>' + ICON.x + '</button></div>' +
+      '<div class="modal-head"><h3>' + esc(infoObj.name || item.name) + '</h3><button class="icon-btn" data-close>' + ICON.x + '</button></div>' +
       '<div class="detail-wrap">' +
-        '<div class="detail-poster">' + imgTag(cover, ICON.tv) + '</div>' +
-        '<div class="detail-info">' +
-          '<h3>' + esc(infoObj.name || item.name) + '</h3>' +
-          '<div class="detail-tags">' +
-            (infoObj.releaseDate ? `<span class="tag">${esc(infoObj.releaseDate)}</span>` : '') +
-            (infoObj.rating ? `<span class="tag">⭐ ${esc(infoObj.rating)}</span>` : '') +
-            `<span class="tag">${seasons.length} temporada${seasons.length === 1 ? '' : 's'}</span>` +
+        '<div class="detail-hero" style="background-image:url(\'' + esc(backdrop) + '\')">' +
+          '<div class="detail-hero-content">' +
+            '<div class="detail-poster">' + imgTag(cover, ICON.tv) + '</div>' +
+            '<div class="detail-info">' +
+              '<h3>' + esc(infoObj.name || item.name) + '</h3>' +
+              '<div class="detail-tags">' +
+                (infoObj.releaseDate ? `<span class="tag">${esc(infoObj.releaseDate)}</span>` : '') +
+                (infoObj.rating ? `<span class="tag">⭐ ${esc(infoObj.rating)}</span>` : '') +
+                `<span class="tag">${seasons.length} temporada${seasons.length === 1 ? '' : 's'}</span>` +
+              '</div>' +
+              '<div class="detail-plot" id="detail-plot">' + esc(infoObj.plot || infoObj.description || 'Sem descrição disponível.') + '</div>' +
+              '<div class="detail-actions">' +
+                `<button class="btn primary" id="detail-play">${ICON.play} Assistir</button>` +
+                `<button class="btn ${faved ? 'danger' : ''}" id="detail-fav">${ICON.heart} ${faved ? 'Remover dos favoritos' : 'Favoritar'}</button>` +
+              '</div>' +
+            '</div>' +
           '</div>' +
-          '<div class="detail-plot">' + esc(infoObj.plot || infoObj.description || 'Sem descrição disponível.') + '</div>' +
-          '<div class="detail-actions">' +
-            `<button class="btn ${faved ? 'danger' : ''}" id="detail-fav">${ICON.heart} ${faved ? 'Remover dos favoritos' : 'Adicionar aos favoritos'}</button>` +
-          '</div>' +
+        '</div>' +
+        '<div class="detail-body">' +
           bannerHtml +
           seasonsHtml +
         '</div>' +
@@ -1064,9 +1204,23 @@ async function openSeriesDetail(item, profileId) {
     const b = $('#detail-fav');
     if (b) {
       b.className = 'btn ' + (nowFaved ? 'danger' : '');
-      b.innerHTML = ICON.heart + (nowFaved ? ' Remover dos favoritos' : ' Adicionar aos favoritos');
+      b.innerHTML = ICON.heart + (nowFaved ? ' Remover dos favoritos' : ' Favoritar');
     }
   };
+
+  const plotEl = $('#detail-plot');
+  if (plotEl) plotEl.onclick = () => plotEl.classList.toggle('expanded');
+
+  const playBtn = $('#detail-play');
+  if (playBtn) {
+    playBtn.onclick = () => {
+      if (seasons.length) {
+        const firstSeason = initialSeason || seasons[0];
+        const eps = episodesMap[firstSeason] || [];
+        if (eps.length) playEp(firstSeason, eps[0]);
+      }
+    };
+  }
 
   function findNextEpisode(seasonKey, epId) {
     const eps = episodesMap[seasonKey] || [];
@@ -1097,14 +1251,18 @@ async function openSeriesDetail(item, profileId) {
       image: item.image,
       src: { type: 'episode', seriesId: item.id, season: seasonKey, epId: ep.id, ext: ep.container_extension || 'mp4' }
     };
-    const start = () => playUrl(url, fullTitle, epTitle, () => {
-      const next = findNextEpisode(seasonKey, ep.id);
-      if (next) {
-        const nNum = next.ep.episode_num != null ? next.ep.episode_num : '';
-        toast(`Próximo episódio: T${next.season} E${nNum}`, 'info');
-        playEp(next.season, next.ep);
-      }
-    }, { track });
+    const start = () => {
+      closeModal();
+      state.epContext = { seasonKey, ep, episodesMap, seasons, profile, item, findNextEpisode, playEp };
+      playUrl(url, fullTitle, epTitle, () => {
+        const next = findNextEpisode(seasonKey, ep.id);
+        if (next) {
+          const nNum = next.ep.episode_num != null ? next.ep.episode_num : '';
+          toast(`Próximo episódio: T${next.season} E${nNum}`, 'info');
+          playEp(next.season, next.ep);
+        }
+      }, { track });
+    };
     const saved = state.progress[key];
     if (saved && saved.position > 30) {
       promptResume(saved, start);
@@ -1352,6 +1510,35 @@ function bindEvents() {
   $('#btn-player-back').onclick = closePlayer;
   $('#btn-player-close').onclick = closePlayer;
   $('#btn-player-retry').onclick = () => state.lastPlay && playUrl(state.lastPlay.url, state.lastPlay.title, state.lastPlay.sub, state.lastPlay.onEnded, state.lastPlay.opts);
+
+  $('#player').addEventListener('click', (e) => {
+    if (e.target.closest('.ep-ctrl-btn') || e.target.closest('.player-chrome') || e.target.closest('.player-error')) return;
+    const p = $('#player');
+    p.classList.add('show-controls');
+    clearTimeout(state.controlsTimer);
+    state.controlsTimer = setTimeout(() => p.classList.remove('show-controls'), 4000);
+  });
+
+  $('#btn-fwd-30').onclick = () => playerSeek(30);
+  $('#btn-rwd-30').onclick = () => playerSeek(-30);
+  $('#btn-next-ep').onclick = () => {
+    const ctx = state.epContext;
+    if (!ctx) return;
+    const next = ctx.findNextEpisode(ctx.seasonKey, ctx.ep.id);
+    if (next) {
+      const nNum = next.ep.episode_num != null ? next.ep.episode_num : '';
+      toast(`Próximo episódio: T${next.season} E${nNum}`, 'info');
+      ctx.playEp(next.season, next.ep);
+    }
+  };
+  $('#btn-prev-ep').onclick = () => {
+    const prev = findPrevEpisode();
+    if (prev && state.epContext) {
+      const pNum = prev.ep.episode_num != null ? prev.ep.episode_num : '';
+      toast(`Episódio anterior: T${prev.season} E${pNum}`, 'info');
+      state.epContext.playEp(prev.season, prev.ep);
+    }
+  };
 
   const videoEl = $('#player-video');
   videoEl.addEventListener('timeupdate', () => {

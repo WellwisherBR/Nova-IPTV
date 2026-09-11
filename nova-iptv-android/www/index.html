@@ -2,6 +2,7 @@
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>Nova IPTV</title>
   <link rel="stylesheet" href="styles.css">
 </head>
@@ -153,6 +154,24 @@
       </button>
     </div>
     <video id="player-video" controls autoplay></video>
+
+    <div id="player-ep-controls" class="player-ep-controls hidden">
+      <button class="ep-ctrl-btn" id="btn-prev-ep" title="Episódio anterior" tabindex="0">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 19l-7-7 7-7"/><path d="M19 19l-7-7 7-7"/></svg>
+      </button>
+      <button class="ep-ctrl-btn" id="btn-rwd-30" title="Voltar 30 segundos" tabindex="0">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 4v6h6"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+        <span class="ep-ctrl-label">30</span>
+      </button>
+      <button class="ep-ctrl-btn" id="btn-fwd-30" title="Avançar 30 segundos" tabindex="0">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+        <span class="ep-ctrl-label">30</span>
+      </button>
+      <button class="ep-ctrl-btn" id="btn-next-ep" title="Próximo episódio" tabindex="0">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 5l7 7-7 7"/><path d="M5 5l7 7-7 7"/></svg>
+      </button>
+    </div>
+
     <div id="player-loading" class="player-loading hidden">
       <div class="spinner"></div>
       <span>Carregando stream...</span>
