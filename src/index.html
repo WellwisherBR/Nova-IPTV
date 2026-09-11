@@ -60,7 +60,7 @@
             <div class="tile-label">Filmes</div>
             <div class="tile-count" id="count-vod">0 filmes</div>
           </div>
-          <div class="tile tile-series" data-type="series">
+          <div class="tile tile-series" data-type="series" tabindex="0">
             <div class="tile-glow"></div>
             <div class="tile-icon">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="2" y="4" width="20" height="14" rx="2"/><path d="M8 21h8M12 18v3"/><path d="m10 8.5 4 2.5-4 2.5v-5z" fill="currentColor" stroke="none"/></svg>
@@ -153,6 +153,24 @@
       </button>
     </div>
     <video id="player-video" controls autoplay></video>
+
+    <div id="player-ep-controls" class="player-ep-controls hidden">
+      <button class="ep-ctrl-btn" id="btn-prev-ep" title="Episódio anterior" tabindex="0">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 19l-7-7 7-7"/><path d="M19 19l-7-7 7-7"/></svg>
+      </button>
+      <button class="ep-ctrl-btn" id="btn-rwd-30" title="Voltar 30 segundos" tabindex="0">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 4v6h6"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+        <span class="ep-ctrl-label">30</span>
+      </button>
+      <button class="ep-ctrl-btn" id="btn-fwd-30" title="Avançar 30 segundos" tabindex="0">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+        <span class="ep-ctrl-label">30</span>
+      </button>
+      <button class="ep-ctrl-btn" id="btn-next-ep" title="Próximo episódio" tabindex="0">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 5l7 7-7 7"/><path d="M5 5l7 7-7 7"/></svg>
+      </button>
+    </div>
+
     <div id="player-loading" class="player-loading hidden">
       <div class="spinner"></div>
       <span>Carregando stream...</span>

@@ -48,6 +48,10 @@ npm install   # instala electron, electron-builder e dependências
 npm start     # abre o app em modo desenvolvimento
 ```
 
+> **A pasta `node_modules` não vai para o GitHub** (ela é ignorada pelo `.gitignore` por conter milhares de arquivos). Todas as dependências estão declaradas no `package.json` — qualquer pessoa que clonar o repositório recria a pasta completa rodando apenas `npm install`.
+>
+> O mesmo vale para a pasta `dist/` (executáveis compilados): publique os `.exe` na aba **Releases** do GitHub em vez de enviá-los junto com o código.
+
 ### Compilar os executáveis
 
 ```bash

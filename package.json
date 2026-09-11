@@ -4,7 +4,7 @@
   "version": "1.0.0",
   "description": "Player IPTV moderno com suporte a Xtream Codes e M3U",
   "main": "main.js",
-  "author": "luanh",
+  "author": "WellwisherBR",
   "license": "MIT",
   "scripts": {
     "start": "electron .",

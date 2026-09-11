@@ -33,7 +33,8 @@ const state = {
   progress: {},
   currentTrack: null,
   resumeAt: 0,
-  lastTrackSave: 0
+  lastTrackSave: 0,
+  epContext: null
 };
 
 let hlsInstance = null;
@@ -171,8 +172,91 @@ function playProgressEntry(entry) {
     toast('Não foi possível continuar: item ou perfil indisponível.', 'error');
     return;
   }
+  if (entry.kind === 'series' && entry.src && entry.src.type === 'episode' && p && p.type === 'xtream') {
+    playEpisodeWithContext(p, entry.src.seriesId, entry.src.season, entry.src.epId, entry.position, entry.name, entry.image);
+    return;
+  }
   const track = { key: entry.key, kind: entry.kind, profileId: entry.profileId, name: entry.name, image: entry.image, src: entry.src };
   playUrl(url, entry.name, entry.kind === 'series' ? 'Série' : 'Filme', null, { track, resume: entry.position });
+}
+
+async function playEpisodeWithContext(profile, seriesId, seasonKey, epId, resumePos, displayName, image) {
+  showLoading('Carregando série...');
+  let info;
+  try {
+    info = await fetchJson(xtreamBase(profile) + '&action=get_series_info&series_id=' + encodeURIComponent(seriesId), 30000);
+  } catch (e) {
+    hideLoading();
+    toast('Erro ao carregar série: ' + e.message, 'error');
+    return;
+  }
+  hideLoading();
+  const episodesMap = (info && info.episodes) || {};
+  const seasons = Object.keys(episodesMap).sort((a, b) => Number(a) - Number(b));
+  const seriesName = (info && info.info && info.info.name) || displayName || 'Série';
+
+  function findNextEpisode(sKey, eId) {
+    const eps = episodesMap[sKey] || [];
+    const idx = eps.findIndex((e) => String(e.id) === String(eId));
+    if (idx >= 0 && idx < eps.length - 1) return { season: sKey, ep: eps[idx + 1] };
+    const sIdx = seasons.indexOf(sKey);
+    if (sIdx >= 0 && sIdx < seasons.length - 1) {
+      const ns = seasons[sIdx + 1];
+      const nEps = episodesMap[ns] || [];
+      if (nEps.length) return { season: ns, ep: nEps[0] };
+    }
+    return null;
+  }
+
+  function playEp(sKey, ep) {
+    const s = normalizeServer(profile.server);
+    const auth = encodeURIComponent(profile.username) + '/' + encodeURIComponent(profile.password);
+    const url = `${s}/series/${auth}/${ep.id}.${ep.container_extension || 'mp4'}`;
+    const num = ep.episode_num != null ? ep.episode_num : '';
+    const epTitle = ep.title || ('Episódio ' + num);
+    const fullTitle = `${seriesName} — T${sKey}E${num}`;
+    const key = `${profile.id}:ep:${seriesId}:S${sKey}:${ep.id}`;
+    const track = {
+      key, kind: 'series', profileId: profile.id, name: fullTitle, image,
+      src: { type: 'episode', seriesId, season: sKey, epId: ep.id, ext: ep.container_extension || 'mp4' }
+    };
+    state.epContext = { seasonKey: sKey, ep, episodesMap, seasons, profile, item: { id: seriesId, name: seriesName, image }, findNextEpisode, playEp };
+    playUrl(url, fullTitle, epTitle, () => {
+      const next = findNextEpisode(sKey, ep.id);
+      if (next) {
+        toast(`Próximo episódio: T${next.season} E${next.ep.episode_num || ''}`, 'info');
+        playEp(next.season, next.ep);
+      }
+    }, { track, resume: 0 });
+  }
+
+  const eps = episodesMap[seasonKey] || [];
+  const ep = eps.find((e) => String(e.id) === String(epId));
+  if (!ep) {
+    toast('Episódio não encontrado.', 'error');
+    return;
+  }
+
+  const s = normalizeServer(profile.server);
+  const auth = encodeURIComponent(profile.username) + '/' + encodeURIComponent(profile.password);
+  const url = `${s}/series/${auth}/${ep.id}.${ep.container_extension || 'mp4'}`;
+  const num = ep.episode_num != null ? ep.episode_num : '';
+  const epTitle = ep.title || ('Episódio ' + num);
+  const fullTitle = `${seriesName} — T${seasonKey}E${num}`;
+  const key = `${profile.id}:ep:${seriesId}:S${seasonKey}:${ep.id}`;
+  const track = {
+    key, kind: 'series', profileId: profile.id, name: fullTitle, image,
+    src: { type: 'episode', seriesId, season: seasonKey, epId: ep.id, ext: ep.container_extension || 'mp4' }
+  };
+
+  state.epContext = { seasonKey, ep, episodesMap, seasons, profile, item: { id: seriesId, name: seriesName, image }, findNextEpisode, playEp };
+  playUrl(url, fullTitle, epTitle, () => {
+    const next = findNextEpisode(seasonKey, ep.id);
+    if (next) {
+      toast(`Próximo episódio: T${next.season} E${next.ep.episode_num || ''}`, 'info');
+      playEp(next.season, next.ep);
+    }
+  }, { track, resume: resumePos });
 }
 
 function promptResume(entry, onFresh) {
@@ -515,17 +599,20 @@ function contCardHtml(entry) {
 }
 
 function liveCardHtml(item, catName) {
+  const key = state.profile ? favKey(state.profile.id, 'live', item.id) : '';
+  const entry = state.profile ? esc(JSON.stringify(favEntryFromItem(item))) : '';
   return (
     '<div class="card-live" data-item="' + esc(JSON.stringify(item)) + '">' +
       '<div class="live-logo">' + imgTag(item.image, ICON.tv) + '</div>' +
-      '<div style="min-width:0"><div class="live-name">' + esc(item.name) + '</div>' +
+      '<div style="min-width:0;flex:1"><div class="live-name">' + esc(item.name) + '</div>' +
       (catName ? '<div class="live-cat">' + esc(catName) + '</div>' : '') + '</div>' +
+      (state.profile ? `<button class="live-fav-btn ${isFav(key) ? 'faved' : ''}" data-fav="${entry}" title="Favorito">${ICON.heart}</button>` : '') +
     '</div>'
   );
 }
 
 function bindCardEvents(container) {
-  container.querySelectorAll('.fav-btn').forEach((btn) => {
+  container.querySelectorAll('.fav-btn, .live-fav-btn').forEach((btn) => {
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
       try {
@@ -535,6 +622,7 @@ function bindCardEvents(container) {
     });
   });
   container.querySelectorAll('[data-item]').forEach((card) => {
+    card.setAttribute('tabindex', '0');
     card.addEventListener('click', () => {
       try {
         const item = JSON.parse(card.dataset.item);
@@ -545,12 +633,16 @@ function bindCardEvents(container) {
     });
   });
   container.querySelectorAll('[data-favitem]').forEach((card) => {
+    card.setAttribute('tabindex', '0');
     card.addEventListener('click', () => {
       try {
         const f = JSON.parse(card.dataset.favitem);
         openFavorite(f);
       } catch {}
     });
+  });
+  container.querySelectorAll('[data-cont]').forEach((card) => {
+    card.setAttribute('tabindex', '0');
   });
 }
 
@@ -589,6 +681,14 @@ function openFavorite(f) {
 function playItem(item) {
   const track = item.kind === 'live' ? null : trackForItem(item);
   if (item.url) {
+    if (item.kind === 'live' && backend.playLiveNative) {
+      backend.playLiveNative(item.url, item.name, 'TV ao Vivo').then(function (ok) {
+        if (!ok) {
+          playUrl(item.url, item.name, 'TV ao Vivo', null, { track: null });
+        }
+      });
+      return;
+    }
     playUrl(item.url, item.name, item.kind === 'live' ? 'TV ao Vivo' : item.kind === 'vod' ? 'Filme' : 'Série', null, { track });
     return;
   }
@@ -603,6 +703,15 @@ function playItem(item) {
   if (item.kind === 'live') url = `${s}/live/${auth}/${item.id}.m3u8`;
   else if (item.kind === 'vod') url = `${s}/movie/${auth}/${item.id}.${item.ext || 'mp4'}`;
   else url = `${s}/series/${auth}/${item.id}.mp4`;
+
+  if (item.kind === 'live' && backend.playLiveNative) {
+    backend.playLiveNative(url, item.name, 'TV ao Vivo').then(function (ok) {
+      if (!ok) {
+        playUrl(url, item.name, 'TV ao Vivo', null, { track: null });
+      }
+    });
+    return;
+  }
   playUrl(url, item.name, item.kind === 'live' ? 'TV ao Vivo' : item.kind === 'vod' ? 'Filme' : 'Série', null, { track });
 }
 
@@ -633,6 +742,9 @@ function filteredItems() {
   let items = currentItems();
   if (c.type === 'favorites') {
     if (c.category) items = items.filter((f) => f.kind === c.category);
+  } else if (c.category === '__fav__') {
+    const favIds = new Set(state.favorites.filter((f) => f.kind === c.type && f.profileId === state.profile.id).map((f) => f.key));
+    items = items.filter((it) => favIds.has(favKey(state.profile.id, c.type, it.id)));
   } else if (c.category) {
     items = items.filter((it) => it.category === c.category);
   }
@@ -653,6 +765,7 @@ function renderContent() {
   if (c.type === 'favorites') {
     const chips = [
       { id: null, name: 'Todos', count: state.favorites.length },
+      { id: 'live', name: 'Canais', count: state.favorites.filter((f) => f.kind === 'live').length },
       { id: 'vod', name: 'Filmes', count: state.favorites.filter((f) => f.kind === 'vod').length },
       { id: 'series', name: 'Séries', count: state.favorites.filter((f) => f.kind === 'series').length }
     ];
@@ -665,6 +778,7 @@ function renderContent() {
     $('#sidebar-foot').textContent = section.items.length.toLocaleString('pt-BR') + ' itens · Atualizado às ' + (state.profile && state.profile.updatedAt ? fmtTime(state.profile.updatedAt) : '—');
   }
   list.querySelectorAll('.cat-item').forEach((el) => {
+    el.setAttribute('tabindex', '0');
     el.addEventListener('click', () => {
       state.content.category = el.dataset.cat === '__all' ? null : el.dataset.cat;
       state.renderLimit = 300;
@@ -847,17 +961,22 @@ function playUrl(url, title, sub, onEnded, opts = {}) {
   state.resumeAt = Number(opts.resume) > 0 ? Number(opts.resume) : 0;
   state.playerOpen = true;
   $('#player').classList.remove('hidden');
+  $('#player').classList.add('show-controls');
+  clearTimeout(state.controlsTimer);
+  state.controlsTimer = setTimeout(() => $('#player').classList.remove('show-controls'), 4000);
   $('#player-title').textContent = title || '';
   $('#player-sub').textContent = sub || '';
   $('#player-error').classList.add('hidden');
   $('#player-loading').classList.remove('hidden');
+  updateEpControlsVisibility();
 
   const video = $('#player-video');
   destroyHls();
   video.removeAttribute('src');
   video.load();
 
-  const looksHls = /\.m3u8(\?|$)/i.test(url) || /\/live\//i.test(url);
+  const looksHls = /\.m3u8(\?|$)/i.test(url);
+  const looksLive = /\/live\//i.test(url);
 
   video.onplaying = () => $('#player-loading').classList.add('hidden');
   video.onwaiting = () => { if (!video.paused) $('#player-loading').classList.remove('hidden'); };
@@ -870,12 +989,30 @@ function playUrl(url, title, sub, onEnded, opts = {}) {
     state.resumeAt = 0;
   };
 
-  if (window.Hls && window.Hls.isSupported() && looksHls) {
+  function tryDirectPlayback(fallbackUrl) {
+    destroyHls();
+    video.removeAttribute('src');
+    video.load();
+    video.src = fallbackUrl;
+    video.onerror = () => {
+      if (state.playerOpen) {
+        showPlayerError('Não foi possível reproduzir este canal. O formato pode não ser suportado pelo player interno. Tente abrir em um player externo.');
+      }
+    };
+    video.play().catch(() => {
+      if (state.playerOpen) {
+        showPlayerError('Não foi possível reproduzir este canal. Tente abrir em um player externo.');
+      }
+    });
+  }
+
+  if (window.Hls && window.Hls.isSupported() && (looksHls || looksLive)) {
     const hls = new Hls({
-      manifestLoadingTimeOut: 15000,
-      manifestLoadingMaxRetry: 2,
-      levelLoadingTimeOut: 15000,
-      fragLoadingTimeOut: 20000
+      manifestLoadingTimeOut: 12000,
+      manifestLoadingMaxRetry: 1,
+      levelLoadingTimeOut: 12000,
+      fragLoadingTimeOut: 15000,
+      enableWorker: false
     });
     hlsInstance = hls;
     hls.loadSource(url);
@@ -883,14 +1020,26 @@ function playUrl(url, title, sub, onEnded, opts = {}) {
     hls.on(Hls.Events.MANIFEST_PARSED, () => video.play().catch(() => {}));
     hls.on(Hls.Events.ERROR, (_e, data) => {
       if (data && data.fatal) {
-        showPlayerError('Falha ao carregar o stream. O servidor pode estar indisponível ou o formato não é suportado. Tente abrir em um player externo.');
+        destroyHls();
+        if (looksLive && /\.m3u8(\?|$)/i.test(url)) {
+          const tsUrl = url.replace(/\.m3u8(\?.*)?$/, '.ts$1');
+          tryDirectPlayback(tsUrl);
+        } else {
+          tryDirectPlayback(url);
+        }
       }
     });
   } else {
     video.src = url;
     video.onerror = () => {
       if (state.playerOpen && video.src) {
-        showPlayerError('Não foi possível reproduzir este conteúdo. O formato pode não ser suportado pelo player interno (ex: MKV). Tente abrir em um player externo.');
+        const errCode = video.error ? video.error.code : 0;
+        let msg = 'Não foi possível reproduzir este conteúdo.';
+        if (errCode === 4) msg += ' O formato/codec não é suportado pelo player interno (ex: MKV, HEVC).';
+        else if (errCode === 2) msg += ' Erro de rede ao conectar com o servidor.';
+        else if (errCode === 3) msg += ' O servidor interrompeu a conexão.';
+        msg += ' Tente abrir em um player externo.';
+        showPlayerError(msg);
       }
     };
     video.play().catch(() => {});
@@ -909,6 +1058,49 @@ function closePlayer() {
   $('#player').classList.add('hidden');
   $('#player-error').classList.add('hidden');
   $('#player-loading').classList.add('hidden');
+  $('#player').classList.remove('show-controls');
+
+  const ctx = state.epContext;
+  state.epContext = null;
+  if (ctx && ctx.item) {
+    openSeriesDetail(ctx.item, ctx.profile.id);
+  }
+}
+
+function findPrevEpisode() {
+  const ctx = state.epContext;
+  if (!ctx) return null;
+  const { seasonKey, ep, episodesMap, seasons } = ctx;
+  const eps = episodesMap[seasonKey] || [];
+  const idx = eps.findIndex((e) => String(e.id) === String(ep.id));
+  if (idx > 0) return { season: seasonKey, ep: eps[idx - 1] };
+  const sIdx = seasons.indexOf(seasonKey);
+  if (sIdx > 0) {
+    const ps = seasons[sIdx - 1];
+    const pEps = episodesMap[ps] || [];
+    if (pEps.length) return { season: ps, ep: pEps[pEps.length - 1] };
+  }
+  return null;
+}
+
+function playerSeek(seconds) {
+  const video = $('#player-video');
+  if (!isFinite(video.duration)) return;
+  video.currentTime = Math.max(0, Math.min(video.duration, video.currentTime + seconds));
+}
+
+function updateEpControlsVisibility() {
+  const el = $('#player-ep-controls');
+  el.classList.remove('hidden');
+  if (state.epContext) {
+    const prev = findPrevEpisode();
+    const next = state.epContext.findNextEpisode(state.epContext.seasonKey, state.epContext.ep.id);
+    $('#btn-prev-ep').style.display = prev ? '' : 'none';
+    $('#btn-next-ep').style.display = next ? '' : 'none';
+  } else {
+    $('#btn-prev-ep').style.display = 'none';
+    $('#btn-next-ep').style.display = 'none';
+  }
 }
 
 async function openSeriesDetail(item, profileId) {
@@ -974,22 +1166,31 @@ async function openSeriesDetail(item, profileId) {
       '</div><div class="episode-list" id="episode-list"></div>';
   }
 
+  const backdrop = infoObj.backdrop_path || infoObj.cover_big || cover || item.image;
+
   openModal(
     '<div class="modal-card wide">' +
-      '<div class="modal-head"><h3>Detalhes da série</h3><button class="icon-btn" data-close>' + ICON.x + '</button></div>' +
+      '<div class="modal-head"><h3>' + esc(infoObj.name || item.name) + '</h3><button class="icon-btn" data-close>' + ICON.x + '</button></div>' +
       '<div class="detail-wrap">' +
-        '<div class="detail-poster">' + imgTag(cover, ICON.tv) + '</div>' +
-        '<div class="detail-info">' +
-          '<h3>' + esc(infoObj.name || item.name) + '</h3>' +
-          '<div class="detail-tags">' +
-            (infoObj.releaseDate ? `<span class="tag">${esc(infoObj.releaseDate)}</span>` : '') +
-            (infoObj.rating ? `<span class="tag">⭐ ${esc(infoObj.rating)}</span>` : '') +
-            `<span class="tag">${seasons.length} temporada${seasons.length === 1 ? '' : 's'}</span>` +
+        '<div class="detail-hero" style="background-image:url(\'' + esc(backdrop) + '\')">' +
+          '<div class="detail-hero-content">' +
+            '<div class="detail-poster">' + imgTag(cover, ICON.tv) + '</div>' +
+            '<div class="detail-info">' +
+              '<h3>' + esc(infoObj.name || item.name) + '</h3>' +
+              '<div class="detail-tags">' +
+                (infoObj.releaseDate ? `<span class="tag">${esc(infoObj.releaseDate)}</span>` : '') +
+                (infoObj.rating ? `<span class="tag">⭐ ${esc(infoObj.rating)}</span>` : '') +
+                `<span class="tag">${seasons.length} temporada${seasons.length === 1 ? '' : 's'}</span>` +
+              '</div>' +
+              '<div class="detail-plot" id="detail-plot">' + esc(infoObj.plot || infoObj.description || 'Sem descrição disponível.') + '</div>' +
+              '<div class="detail-actions">' +
+                `<button class="btn primary" id="detail-play">${ICON.play} Assistir</button>` +
+                `<button class="btn ${faved ? 'danger' : ''}" id="detail-fav">${ICON.heart} ${faved ? 'Remover dos favoritos' : 'Favoritar'}</button>` +
+              '</div>' +
+            '</div>' +
           '</div>' +
-          '<div class="detail-plot">' + esc(infoObj.plot || infoObj.description || 'Sem descrição disponível.') + '</div>' +
-          '<div class="detail-actions">' +
-            `<button class="btn ${faved ? 'danger' : ''}" id="detail-fav">${ICON.heart} ${faved ? 'Remover dos favoritos' : 'Adicionar aos favoritos'}</button>` +
-          '</div>' +
+        '</div>' +
+        '<div class="detail-body">' +
           bannerHtml +
           seasonsHtml +
         '</div>' +
@@ -1003,9 +1204,23 @@ async function openSeriesDetail(item, profileId) {
     const b = $('#detail-fav');
     if (b) {
       b.className = 'btn ' + (nowFaved ? 'danger' : '');
-      b.innerHTML = ICON.heart + (nowFaved ? ' Remover dos favoritos' : ' Adicionar aos favoritos');
+      b.innerHTML = ICON.heart + (nowFaved ? ' Remover dos favoritos' : ' Favoritar');
     }
   };
+
+  const plotEl = $('#detail-plot');
+  if (plotEl) plotEl.onclick = () => plotEl.classList.toggle('expanded');
+
+  const playBtn = $('#detail-play');
+  if (playBtn) {
+    playBtn.onclick = () => {
+      if (seasons.length) {
+        const firstSeason = initialSeason || seasons[0];
+        const eps = episodesMap[firstSeason] || [];
+        if (eps.length) playEp(firstSeason, eps[0]);
+      }
+    };
+  }
 
   function findNextEpisode(seasonKey, epId) {
     const eps = episodesMap[seasonKey] || [];
@@ -1036,14 +1251,18 @@ async function openSeriesDetail(item, profileId) {
       image: item.image,
       src: { type: 'episode', seriesId: item.id, season: seasonKey, epId: ep.id, ext: ep.container_extension || 'mp4' }
     };
-    const start = () => playUrl(url, fullTitle, epTitle, () => {
-      const next = findNextEpisode(seasonKey, ep.id);
-      if (next) {
-        const nNum = next.ep.episode_num != null ? next.ep.episode_num : '';
-        toast(`Próximo episódio: T${next.season} E${nNum}`, 'info');
-        playEp(next.season, next.ep);
-      }
-    }, { track });
+    const start = () => {
+      closeModal();
+      state.epContext = { seasonKey, ep, episodesMap, seasons, profile, item, findNextEpisode, playEp };
+      playUrl(url, fullTitle, epTitle, () => {
+        const next = findNextEpisode(seasonKey, ep.id);
+        if (next) {
+          const nNum = next.ep.episode_num != null ? next.ep.episode_num : '';
+          toast(`Próximo episódio: T${next.season} E${nNum}`, 'info');
+          playEp(next.season, next.ep);
+        }
+      }, { track });
+    };
     const saved = state.progress[key];
     if (saved && saved.position > 30) {
       promptResume(saved, start);
@@ -1292,6 +1511,35 @@ function bindEvents() {
   $('#btn-player-close').onclick = closePlayer;
   $('#btn-player-retry').onclick = () => state.lastPlay && playUrl(state.lastPlay.url, state.lastPlay.title, state.lastPlay.sub, state.lastPlay.onEnded, state.lastPlay.opts);
 
+  $('#player').addEventListener('click', (e) => {
+    if (e.target.closest('.ep-ctrl-btn') || e.target.closest('.player-chrome') || e.target.closest('.player-error')) return;
+    const p = $('#player');
+    p.classList.add('show-controls');
+    clearTimeout(state.controlsTimer);
+    state.controlsTimer = setTimeout(() => p.classList.remove('show-controls'), 4000);
+  });
+
+  $('#btn-fwd-30').onclick = () => playerSeek(30);
+  $('#btn-rwd-30').onclick = () => playerSeek(-30);
+  $('#btn-next-ep').onclick = () => {
+    const ctx = state.epContext;
+    if (!ctx) return;
+    const next = ctx.findNextEpisode(ctx.seasonKey, ctx.ep.id);
+    if (next) {
+      const nNum = next.ep.episode_num != null ? next.ep.episode_num : '';
+      toast(`Próximo episódio: T${next.season} E${nNum}`, 'info');
+      ctx.playEp(next.season, next.ep);
+    }
+  };
+  $('#btn-prev-ep').onclick = () => {
+    const prev = findPrevEpisode();
+    if (prev && state.epContext) {
+      const pNum = prev.ep.episode_num != null ? prev.ep.episode_num : '';
+      toast(`Episódio anterior: T${prev.season} E${pNum}`, 'info');
+      state.epContext.playEp(prev.season, prev.ep);
+    }
+  };
+
   const videoEl = $('#player-video');
   videoEl.addEventListener('timeupdate', () => {
     if (!state.currentTrack || !isFinite(videoEl.duration) || videoEl.currentTime < 15) return;
@@ -1324,9 +1572,67 @@ function bindEvents() {
   });
 
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') {
+    if (e.key === 'Escape' || e.key === 'Backspace' && document.activeElement === document.body) {
       if (!$('#modal-backdrop').classList.contains('hidden')) closeModal();
       else if (!$('#player').classList.contains('hidden')) closePlayer();
+      else if (state.view === 'content') goHome();
+      return;
+    }
+
+    // Navegação por D-pad (controle remoto / TV Smart)
+    const focusable = '.tile, .card-poster, .card-live, .cat-item, .episode, .season-tab, .btn, .icon-btn';
+    const active = document.activeElement;
+    const isNavigable = active && active.matches && active.matches(focusable);
+
+    if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
+      if (!isNavigable) {
+        const first = document.querySelector(focusable);
+        if (first) { first.focus(); e.preventDefault(); }
+        return;
+      }
+      // Navegação por grade: encontrar o próximo elemento na direção
+      const container = active.closest('.grid, .tiles, .cat-list, .fav-row, .episode-list, .season-tabs, #topbar, .pc-actions');
+      if (!container) return;
+      const items = Array.from(container.querySelectorAll(focusable)).filter(el => el.offsetParent !== null);
+      const idx = items.indexOf(active);
+      if (idx === -1) return;
+
+      let next = null;
+      if (e.key === 'ArrowRight') next = items[idx + 1];
+      else if (e.key === 'ArrowLeft') next = items[idx - 1];
+      else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        // Para grade, tentar encontrar item na linha seguinte/anterior
+        const activeRect = active.getBoundingClientRect();
+        const candidates = items.filter(el => {
+          const r = el.getBoundingClientRect();
+          if (e.key === 'ArrowDown') return r.top > activeRect.top + 10;
+          return r.bottom < activeRect.bottom - 10;
+        });
+        if (candidates.length) {
+          next = candidates.reduce((best, el) => {
+            const r = el.getBoundingClientRect();
+            const b = best.getBoundingClientRect();
+            const distA = Math.abs(r.left - activeRect.left) + Math.abs(r.top - activeRect.top);
+            const distB = Math.abs(b.left - activeRect.left) + Math.abs(b.top - activeRect.top);
+            return distA < distB ? el : best;
+          });
+        }
+      }
+      if (next) { next.focus(); next.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' }); e.preventDefault(); }
+    }
+
+    // Tecla OK/Enter/Select do controle
+    if (e.key === 'Enter' && isNavigable && active !== document.body) {
+      active.click();
+      e.preventDefault();
+    }
+
+    // Tecla Back do Android TV
+    if (e.key === 'GoBack' || e.keyCode === 4) {
+      if (!$('#modal-backdrop').classList.contains('hidden')) closeModal();
+      else if (!$('#player').classList.contains('hidden')) closePlayer();
+      else if (state.view === 'content') goHome();
+      e.preventDefault();
     }
   });
 }
